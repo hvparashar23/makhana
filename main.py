@@ -78,7 +78,7 @@ with tab2:
     admin_password = st.text_input("Admin Password", type="password", key="admin_pass")
 
     if st.button("🔓 Login"):
-        if admin_username == "admin" and admin_password == "makahan123":
+        if admin_username == "admin" and admin_password == "harsh123":
             st.success("✅ Login successful")
 
             if os.path.exists("orders.csv"):
