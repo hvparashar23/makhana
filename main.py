@@ -1,4 +1,3 @@
-# As planning to utilize the features of st
 import streamlit as st
 from datetime import datetime
 import pandas as pd 
@@ -6,7 +5,6 @@ import os
 from fpdf import FPDF
 import smtplib
 from email.message import EmailMessage
-# from twilio.rest import Client  # Uncomment if using Twilio for SMS alerts
 
 # Page configuration
 st.set_page_config(page_title="Makahan Store", layout="centered")
@@ -25,7 +23,7 @@ orders_path = "orders.csv"
 if not os.path.exists(orders_path):
     orders_df = pd.DataFrame(columns=[
         "Date", "Customer Name", "Phone", "Email", "Address", "Product",
-        "Rating", "Referred Name", "Referred Contact"
+        "Quantity", "Rating", "Referred Name", "Referred Contact"
     ])
     orders_df.to_csv(orders_path, index=False)
 
@@ -57,6 +55,9 @@ with tab1:
     selected_product = st.selectbox("Select a product to view and order", list(product_options.keys()))
     st.image(product_options[selected_product], caption=selected_product, use_column_width=True)
 
+    # --- Quantity Selection ---
+    quantity = st.number_input("Enter quantity to order", min_value=1, step=1, value=1)
+
     # --- Rating ---
     st.header("🌟 Rate this product")
     rating = st.slider("How would you rate this product?", 1, 5, 4)
@@ -71,7 +72,8 @@ with tab1:
         if name and phone and address:
             inventory_df = pd.read_csv(inventory_path)
             current_stock = inventory_df.loc[inventory_df['Product'] == selected_product, 'Stock'].values[0]
-            if current_stock > 0:
+            
+            if quantity <= current_stock:
                 order_data = {
                     "Date": datetime.now().strftime("%Y-%m-%d %H:%M:%S"),
                     "Customer Name": name,
@@ -79,6 +81,7 @@ with tab1:
                     "Email": email,
                     "Address": address,
                     "Product": selected_product,
+                    "Quantity": quantity,
                     "Rating": rating,
                     "Referred Name": ref_name,
                     "Referred Contact": ref_contact
@@ -88,11 +91,11 @@ with tab1:
                 df_orders.to_csv(orders_path, index=False)
 
                 # Update inventory
-                inventory_df.loc[inventory_df['Product'] == selected_product, 'Stock'] -= 1
+                inventory_df.loc[inventory_df['Product'] == selected_product, 'Stock'] -= quantity
                 inventory_df.to_csv(inventory_path, index=False)
 
-                st.success("✅ Order placed successfully and saved!")
-                st.info(f"Thank you, {name}! We'll deliver your {selected_product} soon.")
+                st.success(f"✅ Order placed successfully for {quantity} units!")
+                st.info(f"Thank you, {name}! We'll deliver your {quantity} units of {selected_product} soon.")
 
                 # Check for low stock and alert
                 low_stock_threshold = 2
@@ -108,16 +111,7 @@ with tab1:
                     except Exception as e:
                         st.error(f"Low stock alert failed: {e}")
             else:
-                st.warning(f"🚨 {selected_product} is out of stock! Admin has been notified.")
-                try:
-                    msg = EmailMessage()
-                    msg['Subject'] = 'Stock Alert: Out of Stock!'
-                    msg['From'] = 'your_email@example.com'
-                    msg['To'] = 'admin_email@example.com'
-                    msg.set_content(f"Product '{selected_product}' is out of stock. Please restock it immediately.")
-                    st.info("Admin has been notified via email.")
-                except Exception as e:
-                    st.error(f"Failed to notify admin: {e}")
+                st.warning(f"🚨 Only {current_stock} units of {selected_product} are available. Please reduce quantity.")
         else:
             st.error("⚠️ Please fill in your name, phone, and address to place an order.")
 
@@ -199,6 +193,8 @@ with tab2:
                 }
                 product = last_order["Product"]
                 price = price_map.get(product, 0)
+                quantity = last_order.get("Quantity", 1)
+                total_price = price * quantity
 
                 pdf = FPDF()
                 pdf.add_page()
@@ -210,7 +206,9 @@ with tab2:
                 pdf.cell(200, 10, txt=f"Phone: {last_order['Phone']}", ln=True)
                 pdf.cell(200, 10, txt=f"Address: {last_order['Address']}", ln=True)
                 pdf.cell(200, 10, txt=f"Product: {product}", ln=True)
-                pdf.cell(200, 10, txt=f"Price: Rs{price}", ln=True)
+                pdf.cell(200, 10, txt=f"Quantity: {quantity}", ln=True)
+                pdf.cell(200, 10, txt=f"Price per unit: Rs{price}", ln=True)
+                pdf.cell(200, 10, txt=f"Total Price: Rs{total_price}", ln=True)
                 pdf.cell(200, 10, txt=f"Rating: {last_order['Rating']}/5", ln=True)
 
                 pdf_file = "invoice_last_order.pdf"
